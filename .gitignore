@@ -235,3 +235,8 @@ Thumbs.db:encryptable
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
+
+# Local application data and tooling
+/.local/
+# This committed template must contain blank credentials only.
+!/.env.example
