@@ -10,37 +10,70 @@
 </head>
 <body>
 <main>
-  <header class="masthead"><a class="brand" href="/" aria-label="Arcade home"><span class="brand-icon">A<span>↗</span></span> ARCADE<span class="brand-sub">FINANCIAL ANALYST</span></a><span class="local"><i></i> LOCAL TERMINAL</span></header>
-  <section id="welcome" class="welcome">
-    <div><span class="eyebrow">THE MARKET HAS ALREADY MOVED. YOU HAVEN’T.</span>
-    <h1>Read the signals.<br>Make your call.</h1>
-    <p>Three rounds. Sixty seconds each. Study a historical chart, question your analyst, then predict the next five trading sessions.</p>
-    <button id="start" class="primary">Start your shift <span>↗</span></button>
-    <p class="fine" id="startup-status">Loading local configuration…</p></div>
-    <div class="brief"><span class="eyebrow">YOUR DESK BRIEF</span><div><b>01</b><p><strong>Research the tape</strong>60 sessions of price and volume. Identity hidden.</p></div><div><b>02</b><p><strong>Find your evidence</strong>Ask about momentum, risk, or conflicting signals.</p></div><div><b>03</b><p><strong>Commit. Then find out.</strong>DOWN &lt; −1% · FLAT ±1% · UP &gt; +1%</p></div><footer>100 accuracy points + up to 20 speed points + combo bonuses.</footer></div>
-  </section>
+  <header class="masthead"><a class="brand" href="/" aria-label="Arcade home"><span class="brand-icon">A↗</span> ARCADE <span class="brand-sub">FINANCIAL ANALYST</span></a><span class="local"><i></i> LOCAL TERMINAL</span></header>
   <div id="error" class="error" role="alert" hidden></div>
-  <section id="terminal" hidden>
-    <div class="desk-heading"><div><span class="eyebrow">PREDICTION DESK</span><h1 id="asset">ASSET A</h1></div><div class="scoreboard"><div><span>ROUND</span><b id="round">01 / 03</b></div><div><span>SCORE</span><b id="score">000</b></div><div><span>COMBO</span><b id="combo">—</b></div><div class="clock"><span>RESEARCH</span><b id="timer" role="timer">01:00</b></div></div></div>
-    <p id="source" class="source"></p>
-    <div class="workspace">
-      <section class="panel market"><div class="panel-heading"><div><span class="eyebrow">PRICE ACTION</span><h2>What’s in the tape?</h2></div><span class="tag">DAILY / INDEXED</span></div>
-        <div class="legend"><span><i class="line-key"></i> Closing price</span><span>First close = 100</span><span id="future-key" hidden>Amber = revealed sessions</span></div>
-        <canvas id="chart" aria-label="Historical indexed closing prices and daily share volume" role="img"></canvas>
-        <div class="chart-footer"><span>RELATIVE TRADING SESSIONS</span><span id="cutoff-label">DAY 0 = RESEARCH CUTOFF</span></div>
-        <div id="metrics" class="metrics"></div>
-        <div class="call-area" id="call-area"><div><strong>Where will the next five sessions close?</strong><span>Your call is final. The clock keeps running while you research.</span></div>
-        <div class="calls"><button data-choice="DOWN" class="down" disabled>↘ DOWN <small>BELOW −1%</small></button><button data-choice="FLAT" class="flat" disabled>→ FLAT <small>−1% TO +1%</small></button><button data-choice="UP" class="up" disabled>↗ UP <small>ABOVE +1%</small></button></div></div>
-        <section id="result" class="result" aria-live="polite" hidden><span class="eyebrow" id="result-kicker"></span><h2 id="result-title"></h2><p id="result-details"></p><p id="result-points"></p><p id="identity" class="fine"></p><button id="next" class="primary">Next round →</button></section>
-      </section>
-      <aside class="panel analyst"><div class="panel-heading"><div><span class="eyebrow">YOUR SECOND PAIR OF EYES</span><h2>Ask the analyst</h2></div><span class="analyst-dot" id="analyst-dot"></span></div>
-      <p id="analyst-status" class="analyst-status"></p>
-      <div id="conversation" class="conversation" aria-live="polite"><p class="conversation-intro">You make the call.<br><span>The analyst helps you inspect the evidence.</span></p></div>
-      <div class="suggestions"><button type="button" data-question="What signals conflict in the visible data?">Conflicting signals</button><button type="button" data-question="What do volatility and volume tell me?">Risk & volume</button></div>
-      <form id="question-form"><label for="question">YOUR QUESTION</label><textarea id="question" rows="2" maxlength="600" placeholder="How strong is the recent momentum?" required></textarea><button id="ask" type="submit">Ask analyst <span>↗</span></button></form>
-      <p class="analyst-foot">Historical evidence only. No news, future prices, or prediction recommendations.</p></aside>
+
+  <section id="welcome" class="welcome" aria-labelledby="welcome-title">
+    <div class="welcome-copy"><span class="eyebrow">HISTORICAL MARKETS / YOUR NEXT CALL</span>
+      <h1 id="welcome-title">Arcade<br><span>Financial Analyst</span></h1>
+      <p class="lead">Read the tape. Question the evidence.<br>Make the call before the clock runs out.</p>
+      <div class="session-spec"><div><b>03</b><span>ROUNDS</span></div><div><b>60s</b><span>PER ROUND</span></div><div><b>05</b><span>SESSIONS TO PREDICT</span></div></div>
+      <button id="start" class="primary">Start <span>↗</span></button>
+      <p class="fine">The countdown starts after you press Start and the chart is ready.</p>
+      <p id="startup-status" class="startup-status">Loading local configuration…</p>
+    </div>
+    <div class="brief"><div class="section-bar"><span>DESK BRIEF / 001</span><span>PRE-MARKET</span></div>
+      <div class="brief-step"><b>01</b><p><strong>Study an anonymous asset</strong>60 historical sessions. Price, volume, and verified indicators.</p></div>
+      <div class="brief-step"><b>02</b><p><strong>Consult your analyst</strong>Explore signals and uncertainty. The final decision stays yours.</p></div>
+      <div class="brief-step"><b>03</b><p><strong>Commit and see the tape</strong>Reveal the next five sessions. Earn accuracy, speed, and combo points.</p></div>
+      <div class="thresholds"><span>DOWN <b>&lt; −1%</b></span><span>FLAT <b>−1% to +1%</b></span><span>UP <b>&gt; +1%</b></span></div>
+      <footer>Historical exercise. No orders, positions, or real-money trades.</footer>
     </div>
   </section>
-  <footer class="footer"><span>ARCADE / A GAME OF EVIDENCE & INSTINCT</span><span>Historical exercise · No trading execution</span></footer>
+
+  <section id="terminal" hidden>
+    <div class="desk-heading"><div class="asset-heading"><span class="eyebrow" id="asset-status">ANONYMOUS ASSET</span><h1 id="asset">ASSET A</h1></div>
+      <div class="scoreboard"><div><span>ROUND</span><b id="round">01 / 03</b></div><div><span>SCORE</span><b id="score">000</b></div><div><span>COMBO</span><b id="combo">—</b></div><div class="clock"><span>RESEARCH</span><b id="timer" role="timer">01:00</b></div></div></div>
+    <p id="source" class="source"></p>
+    <div class="workspace">
+      <section class="panel market" aria-labelledby="market-title">
+        <div class="panel-heading"><div><span class="eyebrow">MARKET TAPE / DAILY</span><h2 id="market-title">Price & volume</h2></div>
+          <div class="chart-switch" role="group" aria-label="Chart view"><button id="candle-view" type="button" data-view="candle" aria-pressed="false">CANDLE</button><button id="line-view" type="button" data-view="line" aria-pressed="true">LINE</button></div></div>
+        <div class="legend"><span id="chart-legend">— Closing price</span><span>Indexed · first close = 100</span><span id="future-key" hidden>+1 → +5 REVEALED</span></div>
+        <div id="chart-readout" class="chart-readout">Hover over a session to inspect OHLC and volume.</div>
+        <canvas id="chart" aria-label="Historical indexed prices and daily share volume" role="img"></canvas>
+        <div class="chart-footer"><span>RELATIVE TRADING SESSIONS</span><span>DAY 0 / RESEARCH CUTOFF</span></div>
+        <div id="metrics" class="metrics"></div>
+        <div class="call-area" id="call-area"><div class="call-heading"><strong>Your five-session outlook</strong><span>One call. Final on submission.</span></div>
+          <div class="calls"><button data-choice="DOWN" class="down" disabled>↘ DOWN <small>BELOW −1%</small></button><button data-choice="FLAT" class="flat" disabled>→ FLAT <small>−1% TO +1%</small></button><button data-choice="UP" class="up" disabled>↗ UP <small>ABOVE +1%</small></button></div></div>
+        <section id="result" class="result" aria-live="polite" hidden>
+          <div class="result-heading"><div><span class="eyebrow">FIVE-SESSION REVEAL</span><h2 id="result-title"></h2></div><b id="result-earned"></b></div>
+          <div class="result-grid"><div><span>YOUR CALL</span><b id="result-call"></b></div><div><span>ACTUAL RETURN</span><b id="result-return"></b></div><div><span>CORRECT DIRECTION</span><b id="result-direction"></b></div></div>
+          <p id="result-points" class="points-breakdown"></p><p id="identity" class="fine"></p>
+          <button id="next" class="primary">Next round →</button>
+        </section>
+      </section>
+      <aside class="panel analyst" aria-labelledby="analyst-title">
+        <div class="chat-header"><span class="chat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-8l-6 3v-3H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/><path d="M7 9h10M7 13h6"/></svg></span><div><span class="eyebrow">YOUR RESEARCH PARTNER</span><h2 id="analyst-title">AI Analyst Chat</h2><span class="chat-subtitle">Ask a question. Explore the evidence.</span></div></div>
+        <div class="chat-connection"><span class="analyst-dot" id="analyst-dot"></span><p id="analyst-status" class="analyst-status"></p></div>
+        <div id="conversation" class="conversation" role="log" aria-label="Analyst conversation" aria-live="polite"></div>
+        <div id="pending-question" class="pending-question" hidden><span class="message-label">YOU · SENDING</span><p id="pending-text"></p><span class="typing-status">Analyst is reviewing… The clock continues.</span></div>
+        <div class="chat-composer">
+          <div class="suggestions"><span class="suggestion-label">TRY ASKING</span><button type="button" data-question="What signals conflict in the visible data?">Conflicting signals ↗</button><button type="button" data-question="What do volatility and volume tell me?">Risk & volume ↗</button></div>
+          <form id="question-form"><label for="question">Message your analyst</label><div class="message-input"><textarea id="question" rows="3" maxlength="600" placeholder="Ask about the chart, momentum, or risk…" aria-describedby="composer-hint" required></textarea><div class="composer-actions"><span id="message-count">0 / 600</span><button id="ask" type="submit"><span id="ask-label">Send message</span><span aria-hidden="true">↑</span></button></div></div><p id="composer-hint" class="composer-hint">Enter to send · Shift + Enter for a new line</p></form>
+          <p class="analyst-foot">Verified evidence. No prediction recommendations.</p>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <section id="end-screen" class="end-screen" aria-labelledby="end-title" hidden>
+    <div class="section-bar"><span>END OF SHIFT / 03 ROUNDS</span><span>SESSION CLOSED</span></div>
+    <div class="end-heading"><span class="eyebrow">YOUR PERFORMANCE REPORT</span><h1 id="end-title" tabindex="-1">The closing bell.</h1><p>Three calls. One completed shift. Here’s how you read the market.</p></div>
+    <div class="end-stats"><div class="final-score"><span>FINAL SCORE</span><b id="final-score">0</b><small>POINTS</small></div><div><span>CORRECT PREDICTIONS</span><b id="final-correct">0 / 3</b></div><div><span>BEST COMBO</span><b id="final-combo">0×</b></div><div><span>ANALYST QUESTIONS</span><b id="final-questions">0</b></div></div>
+    <p id="end-source" class="source"></p><p class="fine">Question count includes valid submissions, even if the provider could not respond.</p>
+    <div class="end-actions"><button id="play-again" class="primary">Play Again <span>↗</span></button><button id="review" class="secondary">Review final round</button></div>
+  </section>
+  <footer class="footer"><span>ARCADE / FINANCIAL ANALYST</span><span>Historical evidence · Your decision</span></footer>
 </main>
 </body></html>

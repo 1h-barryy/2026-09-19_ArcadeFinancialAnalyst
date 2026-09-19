@@ -1,6 +1,7 @@
 """Provider boundary, validated OHLCV format, private cache and fictional data."""
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta, timezone
+from itertools import combinations
 import json
 import math
 from pathlib import Path
@@ -140,24 +141,68 @@ def write_cache(path: Path, data: Dataset) -> None:
     temporary.replace(path)
 
 
-def synthetic(seed: int = 113) -> tuple[Dataset, ...]:
-    rng = random.Random(seed)
-    scenarios = []
-    # Entire paths are generated before gameplay; player choices never enter this function.
-    for n, drift in enumerate((0.0016, -0.001, 0.0002)):
-        rows, price, day = [], 100.0, date(2000, 1, 3)
-        for i in range(65):
-            while day.weekday() >= 5:
-                day += timedelta(days=1)
-            o = price * (1 + rng.uniform(-0.003, 0.003))
-            change = drift + rng.gauss(0, (0.008, 0.014, 0.004)[n])
-            price = o * (1 + change)
-            rows.append(dict(date=day.isoformat(), open=o, high=max(o, price) * 1.004,
-                             low=min(o, price) * 0.996, close=price,
-                             volume=rng.randint(500_000, 2_000_000)))
+SYNTHETIC_PATTERNS = (
+    "uptrend", "downtrend", "sideways", "choppy", "high_volatility",
+    "reversal_up", "reversal_down", "breakout",
+)
+
+
+def _synthetic_scenario(pattern: str, rng: random.Random) -> Dataset:
+    """Generate all 65 sessions with the same process on both sides of the cutoff."""
+    rows, price, day = [], rng.uniform(60, 180), date(2000, 1, 3)
+    anchor = price
+    trend = rng.uniform(0.001, 0.004)
+    volatility = rng.uniform(0.006, 0.015)
+    pivot = rng.randint(23, 47)
+    direction = rng.choice((-1, 1))
+    base_volume = rng.randint(400_000, 2_500_000)
+    for i in range(65):
+        while day.weekday() >= 5:
             day += timedelta(days=1)
-        scenarios.append(Dataset(validate(rows), "SYNTHETIC DEMO", f"FICTION-{n + 1}",
-                                 "2000-01-01T00:00:00+00:00", "fictional raw prices"))
+        sigma = volatility
+        if pattern == "uptrend":
+            drift = trend
+        elif pattern == "downtrend":
+            drift = -trend
+        elif pattern == "sideways":
+            sigma *= 0.55
+            drift = 0.10 * math.log(anchor / price)
+        elif pattern == "choppy":
+            sigma *= 1.2
+            drift = 0.006 * math.sin(i * 0.7) + 0.06 * math.log(anchor / price)
+        elif pattern == "high_volatility":
+            sigma *= 2.5
+            drift = direction * trend * 0.25
+        elif pattern in ("reversal_up", "reversal_down"):
+            drift = trend * (1 if i >= pivot else -1)
+            if pattern == "reversal_down":
+                drift = -drift
+        else:  # Breakout from a quieter range, in either direction.
+            sigma *= 0.5 if i < pivot else 1.4
+            drift = 0.08 * math.log(anchor / price) if i < pivot else direction * trend * 1.6
+        o = price * math.exp(max(-0.03, min(0.03, rng.gauss(0, sigma * 0.2))))
+        change = max(-0.12, min(0.12, rng.gauss(drift, sigma)))
+        price = o * math.exp(change)
+        wick = rng.uniform(0.001, sigma * 0.8 + 0.002)
+        rows.append(dict(date=day.isoformat(), open=o, high=max(o, price) * math.exp(wick),
+                         low=min(o, price) * math.exp(-wick), close=price,
+                         volume=int(base_volume * rng.uniform(0.6, 1.4) * (1 + abs(change) / sigma * 0.25))))
+        day += timedelta(days=1)
+    return Dataset(validate(rows), "SYNTHETIC DEMO", f"FICTION-{rng.getrandbits(48):012X}",
+                   "2000-01-01T00:00:00+00:00", "fictional raw prices")
+
+
+def synthetic(seed: int | None = None) -> tuple[Dataset, ...]:
+    """Fresh entropy by default; an explicit seed reproduces the complete datasets."""
+    rng = random.Random(seed)
+    scenarios, seen = [], set()
+    # Entire paths are generated before gameplay; player choices never enter this function.
+    for pattern in rng.sample(SYNTHETIC_PATTERNS, 3):
+        data = _synthetic_scenario(pattern, rng)
+        while data.bars in seen:
+            data = _synthetic_scenario(pattern, rng)
+        seen.add(data.bars)
+        scenarios.append(data)
     return tuple(scenarios)
 
 
@@ -172,6 +217,12 @@ def candidate_windows(data: Dataset) -> list[int]:
     return candidates
 
 
+def scenario_windows(data: Dataset) -> list[tuple[int, int, int]]:
+    """Unique chronological cutoffs whose hidden five-session intervals do not overlap."""
+    return [(a, b, c) for a, b, c in combinations(candidate_windows(data), 3)
+            if b - a >= 5 and c - b >= 5]
+
+
 def load(mode: str, symbol: str, key: str, cache_dir: Path,
          client: httpx.Client | None = None) -> tuple[tuple[Dataset, ...], str]:
     symbol = ticker(symbol)
@@ -184,7 +235,7 @@ def load(mode: str, symbol: str, key: str, cache_dir: Path,
     if mode == "auto" and path.exists():
         try:
             cached = read_cache(path, symbol)
-            if len(candidate_windows(cached)) < 3:
+            if not scenario_windows(cached):
                 raise DataError("Cached data has too few usable windows after raw-price screening.")
             return (cached,), "REAL CACHED DATA · Reused validated local data; no new stock request."
         except DataError as exc:
@@ -195,7 +246,7 @@ def load(mode: str, symbol: str, key: str, cache_dir: Path,
             write_cache(path, data)
         except OSError:
             notes.append("Download succeeded, but the local cache could not be saved.")
-        if len(candidate_windows(data)) < 3:
+        if not scenario_windows(data):
             raise DataError("Too few usable real windows after raw-price split/jump screening; choose another ticker.")
         return (data,), " ".join(notes + ["REAL LIVE DATA · Alpha Vantage request succeeded."])
     except DataError as exc:

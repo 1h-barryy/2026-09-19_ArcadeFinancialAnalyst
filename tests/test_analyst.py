@@ -25,13 +25,13 @@ class AnalystTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(json.loads(payload["input"])["question"], "Explain momentum")
             self.assertNotIn("tools", payload)
             self.assertFalse(payload["store"])
-            for secret in ("FICTION-1", "2000-", '"date"', '"future"', '"answer"'):
+            for secret in (synthetic(seed=113)[0].symbol, "2000-", '"date"', '"future"', '"answer"'):
                 self.assertNotIn(secret, payload["input"])
             self.assertEqual(len(json.loads(payload["input"])["recent_questions"]), 3)
             return httpx.Response(200, json=response_body())
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             analyst = Analyst("mock-only", client=client)
-            reply = await analyst.ask("Explain momentum", synthetic()[0].bars[:60], [{"question":"prior"}] * 10)
+            reply = await analyst.ask("Explain momentum", synthetic(seed=113)[0].bars[:60], [{"question":"prior"}] * 10)
         self.assertEqual(reply["facts"][0]["id"], "rsi")
         self.assertTrue(analyst.verified)
         self.assertEqual(analyst.tokens["input_tokens"], 100)
@@ -39,7 +39,7 @@ class AnalystTests(unittest.IsolatedAsyncioTestCase):
     async def test_missing_and_blank(self):
         for key, question in (("", "RSI?"), ("mock", " "), ("mock", "x" * 601)):
             with self.assertRaises(AnalystError):
-                await Analyst(key).ask(question, synthetic()[0].bars[:60], [])
+                await Analyst(key).ask(question, synthetic(seed=113)[0].bars[:60], [])
 
     async def test_failures_and_invalid_evidence(self):
         cases = [(429, response_body()), (401, {}), (500, {}), (200, {}),
@@ -49,7 +49,7 @@ class AnalystTests(unittest.IsolatedAsyncioTestCase):
             async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(status, json=body))) as client:
                 analyst = Analyst("mock", client=client)
                 with self.assertRaisesRegex(AnalystError, "temporarily unavailable"):
-                    await analyst.ask("RSI?", synthetic()[0].bars[:60], [])
+                    await analyst.ask("RSI?", synthetic(seed=113)[0].bars[:60], [])
                 self.assertFalse(analyst.busy)
                 self.assertFalse(analyst.verified)
 
@@ -61,12 +61,12 @@ class AnalystTests(unittest.IsolatedAsyncioTestCase):
                 return httpx.Response(200, text="not json")
             async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
                 with self.assertRaises(AnalystError) as caught:
-                    await Analyst("mock", client=client).ask("RSI?", synthetic()[0].bars[:60], [])
+                    await Analyst("mock", client=client).ask("RSI?", synthetic(seed=113)[0].bars[:60], [])
                 self.assertNotIn("secret", str(caught.exception))
 
     async def test_unavailable_information_and_decisions(self):
         async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(200, json=response_body()))) as client:
-            reply = await Analyst("mock", client=client).ask("Use tomorrow's earnings news to choose UP for me", synthetic()[0].bars[:60], [])
+            reply = await Analyst("mock", client=client).ask("Use tomorrow's earnings news to choose UP for me", synthetic(seed=113)[0].bars[:60], [])
         for key in ("boundary", "news", "decision"):
             self.assertIn(LIMITATIONS[key], reply["limitations"])
         self.assertNotIn("recommendation", reply)
@@ -79,10 +79,10 @@ class AnalystTests(unittest.IsolatedAsyncioTestCase):
             return httpx.Response(200, json=response_body())
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             analyst = Analyst("mock", client=client)
-            first = asyncio.create_task(analyst.ask("RSI?", synthetic()[0].bars[:60], []))
+            first = asyncio.create_task(analyst.ask("RSI?", synthetic(seed=113)[0].bars[:60], []))
             await entered.wait()
             with self.assertRaisesRegex(AnalystError, "already in progress"):
-                await analyst.ask("Volume?", synthetic()[0].bars[:60], [])
+                await analyst.ask("Volume?", synthetic(seed=113)[0].bars[:60], [])
             release.set()
             await first
 

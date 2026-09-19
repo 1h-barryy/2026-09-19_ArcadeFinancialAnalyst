@@ -2,11 +2,12 @@
 from dataclasses import dataclass, field
 from decimal import Decimal
 import math
+import random
 import statistics
 import time
 import uuid
 
-from .data import Bar, DataError, Dataset, candidate_windows
+from .data import Bar, DataError, Dataset, scenario_windows
 
 
 class GameError(ValueError):
@@ -104,19 +105,20 @@ class Game:
     current: int = 0
     score: int = 0
     combo: int = 0
+    analyst_questions: int = 0
     clock: object = time.monotonic
 
     @classmethod
-    def create(cls, datasets: tuple[Dataset, ...], notice: str, clock=time.monotonic):
+    def create(cls, datasets: tuple[Dataset, ...], notice: str, clock=time.monotonic, *, seed: int | None = None):
         if len(datasets) == 3 and all(d.source == "SYNTHETIC DEMO" for d in datasets):
             rounds = [Round(d, 59) for d in datasets]
         else:
             data = datasets[0]
-            candidates = candidate_windows(data)
-            if len(candidates) < 3:
-                raise DataError("At least three usable research/outcome windows are required.")
+            candidates = scenario_windows(data)
+            if not candidates:
+                raise DataError("Three usable windows with non-overlapping five-session outcomes are required.")
             # Chronological cutoffs ensure an earlier reveal never exposes a later round's outcome.
-            ends = [candidates[0], candidates[len(candidates) // 2], candidates[-1]]
+            ends = random.Random(seed).choice(candidates)
             rounds = [Round(data, end) for end in ends]
         return cls(rounds, notice, clock=clock)
 
@@ -181,6 +183,13 @@ class Game:
     def public(self):
         self.expire()
         r = self.round
+        correct_predictions = best_combo = streak = 0
+        for round_ in self.rounds:
+            if round_.result is not None:
+                correct = round_.result["correct"]
+                correct_predictions += int(correct)
+                streak = streak + 1 if correct else 0
+                best_combo = max(best_combo, streak)
         return {"round_id": r.id, "round": self.current + 1, "total_rounds": 3,
                 "score": self.score, "combo": self.combo, "notice": self.notice,
                 "synthetic": r.data.source == "SYNTHETIC DEMO",
@@ -189,4 +198,6 @@ class Game:
                 "remaining": max(0, r.deadline - self.clock()) if r.deadline is not None else 60,
                 "chart": indexed(r.research, r.research[0].close), "evidence": evidence(r.research),
                 "result": r.result, "complete": self.current == 2 and r.result is not None,
-                "history": r.history, "asking": r.asking}
+                "history": r.history, "asking": r.asking,
+                "summary": {"correct_predictions": correct_predictions,
+                            "best_combo": best_combo, "analyst_questions": self.analyst_questions}}

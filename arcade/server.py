@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .analyst import Analyst, AnalystError
-from .data import DataError, load
+from .data import DataError, load, synthetic
 from .game import Game, GameError
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -96,6 +96,10 @@ def create_app(mode="auto", symbol="IBM", stock_key="", openai_key="", model="gp
                 except DataError as exc:
                     last_error = str(exc)
                     raise
+            elif all(data.source == "SYNTHETIC DEMO" for data in loaded[0]):
+                # Retain the mode/fallback notice, but never replay cached fictional paths.
+                # Previously created games still own their original immutable datasets.
+                loaded = (synthetic(), loaded[1])
         game = Game.create(*loaded, clock=clock)
         old = request.cookies.get("arcade_session")
         if old in sessions:
@@ -142,6 +146,11 @@ def create_app(mode="auto", symbol="IBM", stock_key="", openai_key="", model="gp
             raise GameError("Research is closed. Analyst requests are only available during the countdown.")
         if round_.asking:
             raise GameError("One analyst request is already in progress.")
+        if not body.question.strip():
+            raise AnalystError("Enter a question between 1 and 600 characters.")
+        # Count valid submissions before awaiting, including eventual provider failures.
+        # Independent of the bounded conversation history and late-arriving replies.
+        game.analyst_questions += 1
         round_.asking = True
         try:
             reply = await advisor.ask(body.question, round_.research, round_.history)

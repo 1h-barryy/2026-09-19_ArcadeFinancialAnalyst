@@ -1,22 +1,26 @@
 from dataclasses import asdict, replace
 from datetime import date, timedelta
 import json
+import random
+import statistics
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 import httpx
 
 from arcade.data import (DataError, candidate_windows, download, load, read_cache,
-                         synthetic, ticker, validate, write_cache)
+                         SYNTHETIC_PATTERNS, _synthetic_scenario,
+                         scenario_windows, synthetic, ticker, validate, write_cache)
+from arcade.game import outcome
 
 
 def provider_payload():
     return {"Meta Data": {"2. Symbol": "IBM"}, "Time Series (Daily)": {
         b.date: {f"{i}. {name}": str(getattr(b, name)) for i, name in
                  enumerate(("open", "high", "low", "close", "volume"), 1)}
-        for b in reversed(synthetic()[0].bars)}}
+        for b in reversed(synthetic(seed=113)[0].bars)}}
 
 
 class DataTests(unittest.TestCase):
@@ -57,7 +61,7 @@ class DataTests(unittest.TestCase):
             self.assertNotIn("secret-provider-body", str(caught.exception))
 
     def test_validation(self):
-        valid = [asdict(b) for b in synthetic()[0].bars]
+        valid = [asdict(b) for b in synthetic(seed=113)[0].bars]
         bads = [[], valid[:64], list(reversed(valid)), [valid[0]] + valid[:-1]]
         for field, value in (("close", float("nan")), ("open", -1), ("high", 0),
                              ("volume", 1.2), ("volume", True), ("date", "nonsense")):
@@ -75,11 +79,11 @@ class DataTests(unittest.TestCase):
             download("AAPL", "mock", self.client(provider_payload()))
 
     def test_modes_cache_and_fallback(self):
-        with tempfile.TemporaryDirectory() as temp:
+        with tempfile.TemporaryDirectory() as temp, patch("arcade.data.synthetic", return_value=synthetic(seed=113)):
             directory = Path(temp)
             with patch("arcade.data.download", side_effect=AssertionError("no network")):
                 datasets, notice = load("demo", "IBM", "", directory)
-                self.assertEqual(datasets, synthetic())
+                self.assertEqual(datasets, synthetic(seed=113))
                 self.assertIn("SYNTHETIC DEMO", notice)
             datasets, notice = load("auto", "IBM", "", directory)
             self.assertIn("fallback", notice)
@@ -91,12 +95,38 @@ class DataTests(unittest.TestCase):
             (directory / "IBM.json").write_text("bad", encoding="utf-8")
             self.assertIn("cache", load("auto", "IBM", "", directory)[1])
 
-    def test_synthetic_fixed_and_varied(self):
-        a, b = synthetic(), synthetic()
+    def test_synthetic_seeded_and_varied(self):
+        a, b = synthetic(seed=113), synthetic(seed=113)
         self.assertEqual(a, b)
         self.assertEqual(len(a), 3)
         self.assertEqual(len({round(d.bars[-1].close / d.bars[59].close, 4) for d in a}), 3)
         self.assertTrue(all(candidate_windows(d) for d in a))
+        self.assertNotEqual(a, synthetic(seed=114))
+        self.assertEqual(len({d.bars for d in a}), 3)
+        self.assertTrue(all(d.source == "SYNTHETIC DEMO" and d.symbol.startswith("FICTION-") for d in a))
+
+    def test_default_generator_uses_fresh_entropy(self):
+        # Deterministically simulate two independent entropy draws, not a chance-based test.
+        generators = [random.Random(1), random.Random(2)]
+        with patch("arcade.data.random.Random", side_effect=generators) as constructor:
+            first, second = synthetic(), synthetic()
+        self.assertEqual(constructor.call_args_list, [call(None), call(None)])
+        self.assertNotEqual(first, second)
+
+    def test_pattern_families_and_natural_outcomes(self):
+        paths = {pattern: _synthetic_scenario(pattern, random.Random(113)) for pattern in SYNTHETIC_PATTERNS}
+        self.assertEqual(len({data.bars for data in paths.values()}), len(SYNTHETIC_PATTERNS))
+        for data in paths.values():
+            self.assertEqual(validate([asdict(b) for b in data.bars]), data.bars)
+            self.assertEqual(len(data.bars), 65)
+        def volatility(data):
+            return statistics.stdev(b.close / a.close - 1 for a, b in zip(data.bars, data.bars[1:]))
+        self.assertGreater(volatility(paths["high_volatility"]), volatility(paths["sideways"]) * 2)
+        games = [synthetic(seed=seed) for seed in range(40)]
+        directions = [tuple(outcome(d.bars[59].close, d.bars[64].close)[0] for d in game) for game in games]
+        self.assertEqual(set(direction for game in directions for direction in game), {"UP", "DOWN", "FLAT"})
+        self.assertTrue(any(len(set(game)) < 3 for game in directions), "Do not balance the three answers")
+        self.assertTrue(all(len({d.bars for d in game}) == 3 for game in games))
 
     def test_successful_live_cache_reuse_and_write_failure(self):
         raw = download("IBM", "mock", self.client(provider_payload()))
@@ -121,7 +151,7 @@ class DataTests(unittest.TestCase):
                 self.assertIn("could not be saved", notice)
 
     def test_split_screen_and_short_real_history(self):
-        original = synthetic()[0]
+        original = synthetic(seed=113)[0]
         bars = list(original.bars)
         for i in range(30,65):
             bars[i] = replace(bars[i], open=bars[i].open/2, high=bars[i].high/2, low=bars[i].low/2, close=bars[i].close/2)
@@ -131,6 +161,14 @@ class DataTests(unittest.TestCase):
             with self.assertRaisesRegex(DataError,"usable real windows"):
                 load("live", "IBM", "mock", Path(temp))
             self.assertIn("SYNTHETIC DEMO fallback", load("auto", "IBM", "mock", Path(temp))[1])
+
+    def test_real_windows_require_separate_hidden_intervals(self):
+        data = synthetic(seed=113)[0]
+        bars = list(data.bars)
+        while len(bars) < 75:
+            bars.append(replace(bars[-1], date=(date.fromisoformat(bars[-1].date) + timedelta(days=1)).isoformat()))
+        self.assertEqual(scenario_windows(replace(data, bars=tuple(bars[:74]))), [])
+        self.assertEqual(scenario_windows(replace(data, bars=tuple(bars))), [(59, 64, 69)])
 
 
 if __name__ == "__main__":

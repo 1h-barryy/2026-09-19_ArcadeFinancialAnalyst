@@ -1,15 +1,16 @@
 from dataclasses import replace
+from datetime import date, timedelta
 import json
 import unittest
 
 from arcade.data import synthetic
-from arcade.game import Game, GameError, evidence, outcome
+from arcade.game import Game, GameError, evidence, indexed, outcome
 
 
 class GameTests(unittest.TestCase):
     def setUp(self):
         self.now = 1000.0
-        self.game = Game.create(synthetic(), "SYNTHETIC DEMO", clock=lambda: self.now)
+        self.game = Game.create(synthetic(seed=113), "SYNTHETIC DEMO", clock=lambda: self.now)
 
     def test_exact_thresholds(self):
         for end, expected in ((99, "FLAT"), (101, "FLAT"), (98.9999, "DOWN"), (101.0001, "UP")):
@@ -20,7 +21,7 @@ class GameTests(unittest.TestCase):
         self.assertEqual(len(public["chart"]), 60)
         self.assertEqual([b["day"] for b in public["chart"]], list(range(-59, 1)))
         encoded = json.dumps(public)
-        for secret in ("FICTION-1", "2000-", '"future"', '"answer"', '"date"'):
+        for secret in (self.game.round.data.symbol, "2000-", '"future"', '"answer"', '"date"'):
             self.assertNotIn(secret, encoded)
         self.assertIsNone(public["result"])
         r = self.game.round
@@ -85,7 +86,7 @@ class GameTests(unittest.TestCase):
         self.assertEqual(r.result["points"], 0)
 
     def test_indicator_values_flat_and_unavailable(self):
-        bars = tuple(replace(b, open=100, high=100, low=100, close=100, volume=0) for b in synthetic()[0].bars[:60])
+        bars = tuple(replace(b, open=100, high=100, low=100, close=100, volume=0) for b in synthetic(seed=113)[0].bars[:60])
         bank = evidence(bars)
         self.assertEqual(bank["return_59"]["value"], 0)
         self.assertEqual(bank["sma_50"]["value"], 100)
@@ -93,6 +94,67 @@ class GameTests(unittest.TestCase):
         self.assertEqual(bank["volatility"]["value"], 0)
         self.assertIsNone(bank["volume_ratio"]["value"])
         self.assertIsNone(evidence(bars[:10])["sma_20"]["value"])
+
+    def test_summary_retains_best_combo_after_timeout(self):
+        for _ in range(2):
+            r = self.game.round
+            self.game.start(r.id)
+            self.game.predict(r.id, outcome(r.research[-1].close, r.future[-1].close)[0])
+            self.game.advance(r.id)
+        self.game.start(self.game.round.id)
+        self.now += 60
+        final = self.game.public()
+        self.assertTrue(final["complete"])
+        self.assertEqual(final["combo"], 0)
+        self.assertEqual(final["summary"], {
+            "correct_predictions": 2, "best_combo": 2, "analyst_questions": 0})
+        self.assertEqual(final["result"]["choice"], "No call")
+
+    def test_all_outcomes_fixed_before_choices_and_shared_with_research(self):
+        datasets = synthetic(seed=909)
+        future_snapshots = [data.bars[60:] for data in datasets]
+        expected = [outcome(data.bars[59].close, data.bars[64].close) for data in datasets]
+        for choice in ("DOWN", "FLAT", "UP", None):
+            now = [1000.0]
+            game = Game.create(datasets, "SYNTHETIC DEMO", clock=lambda: now[0])
+            for index, data in enumerate(datasets):
+                r = game.round
+                self.assertIs(r.data, data)
+                self.assertEqual(r.future, future_snapshots[index])
+                before = game.public()
+                self.assertEqual(before["label"], f"ASSET {chr(65 + index)}")
+                self.assertEqual(before["evidence"], evidence(data.bars[:60]))
+                self.assertEqual(before["chart"], indexed(data.bars[:60], data.bars[0].close))
+                self.assertIsNone(before["result"])
+                game.start(r.id)
+                if choice is None:
+                    now[0] += 60
+                    game.expire()
+                else:
+                    game.predict(r.id, choice)
+                self.assertEqual((r.result["answer"], r.result["change"]), expected[index])
+                self.assertEqual(r.future, future_snapshots[index])
+                self.assertEqual(r.result["future"], indexed(future_snapshots[index], data.bars[0].close, 1))
+                if index < 2:
+                    game.advance(r.id)
+
+    def test_real_window_selection_random_seeded_and_leak_safe(self):
+        data = synthetic(seed=113)[0]
+        bars = list(data.bars)
+        while len(bars) < 100:
+            bars.append(replace(bars[-1], date=(date.fromisoformat(bars[-1].date) + timedelta(days=1)).isoformat()))
+        real = replace(data, source="Alpha Vantage", symbol="PRIVATE-TICKER", bars=tuple(bars))
+        def cutoffs(seed):
+            return tuple(r.cutoff for r in Game.create((real,), "REAL CACHED DATA", seed=seed).rounds)
+        self.assertEqual(cutoffs(42), cutoffs(42))
+        self.assertGreater(len({cutoffs(seed) for seed in range(10)}), 1)
+        for seed in range(10):
+            a, b, c = cutoffs(seed)
+            self.assertGreaterEqual(b - a, 5)
+            self.assertGreaterEqual(c - b, 5)
+        game = Game.create((real,), "REAL CACHED DATA", seed=42)
+        self.assertNotIn(real.symbol, json.dumps(game.public()))
+        self.assertTrue(all(r.data is real for r in game.rounds))
 
 
 if __name__ == "__main__":
