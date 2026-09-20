@@ -43,3 +43,12 @@ Clone the repository and open PowerShell in the project folder.
 py -3 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe run.py --mode demo
+
+## API Keys 
+
+Private API keys are intentionally not included in this repository.
+
+The game can be launched immediately in `demo` mode without a stock API key:
+
+```powershell
+.\.venv\Scripts\python.exe run.py --mode demo
